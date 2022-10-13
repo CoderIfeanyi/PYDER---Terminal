@@ -1,0 +1,251 @@
+//init the terminal
+(function(w,d,$){
+
+    if($('#terminalZone').length>0) {
+        $('body').css('overflow', 'hidden');
+        var objDiv = document.getElementById("terminalZone");
+        jQuery("input#final_span").focus();
+        
+        setTimeout(function(){
+            objDiv.scrollTop = objDiv.scrollHeight + 2000;
+        }, 300);
+
+        $('body').keypress(function(){
+            jQuery("input#final_span").focus();
+        });
+    }
+
+
+    jQuery(".doityourself").click(function(e){
+        e.preventDefault();
+        var letters = ["a","b","o","u","t"," ","(","\"","M", "y", "S","Q","L", "\"", ")"];
+        if(jQuery(this).hasClass("showhelpvideo"))
+        {
+            var lettersArray = 'play ("Michael Jackson Smooth Criminal");';
+            letters = lettersArray.split("");
+        }
+        i=0;
+        if(typeof typing !== 'undefined')
+            clearInterval(typing);
+        jQuery("input#final_span").val("");
+        typing = setInterval(function(){
+            if(i<letters.length)
+            {
+                jQuery("input#final_span").val(jQuery("input#final_span").val() + letters[i]);
+                i++;
+            }
+            else
+            {
+                pushtoURI();
+
+                if(jQuery('.loading').is(':visible'))
+                    return;
+                else
+                    jQuery('.loading').show();
+
+                doTheRequest(jQuery("input#final_span").val());
+                jQuery('input#final_span').val("");
+                clearInterval(typing);
+            }
+        }, 150);
+    });
+
+
+    jQuery("input#final_span").keypress(function(event){
+        if(event.keyCode == 13)
+        {
+            if(jQuery('.loading').is(':visible'))
+                return;
+            else
+                jQuery('.loading').show();
+            pushtoURI();
+            value = jQuery("input#final_span").val();
+            jQuery('input#final_span').val("");
+            doTheRequest(value);
+        }
+    });
+
+
+    function pushtoURI()
+    {
+        request = jQuery("input#final_span").val();
+        request = request.replace(/[^A-Za-z0-9]/gi, "-");
+        request = request.replace(/[-]{2,}/gi, "-");
+        if(request.substr(-1)=="-")
+        {
+            request = request.substr(0,request.length-1);
+        }
+        request = encodeURIComponent(request);
+        stateObj = {"page":"terminal", "request": jQuery("input#final_span").val()};
+
+        history.pushState(stateObj, "Terminal Request", "/terminal/" + request);
+    }
+
+    function doTheRequest(value)
+    {
+        ga('send', 'event', 'Terminal', value);
+        jQuery.ajax({
+            url: "/terminal",
+            type: 'POST',
+            data: { "data": value }
+        }).done( function(r)
+        {
+            var objDiv = document.getElementById("terminalZone");
+            if(r=='clear')
+            {
+                jQuery(".results").empty();
+                jQuery('.loading').hide();
+                jQuery('input#final_span').focus();
+
+                setTimeout(function(){
+                    objDiv.scrollTop = objDiv.scrollHeight + 2000;
+                }, 200);
+
+                return;
+            }
+            if(r==='')
+            {
+                jQuery(".results").append("<p>-------------------------</p><p>Empty or repeated commands are unacceptable.</p>");
+                jQuery('.loading').hide();
+                jQuery('input#final_span').focus();
+
+                setTimeout(function(){
+                    objDiv.scrollTop = objDiv.scrollHeight + 2000;
+                }, 200);
+
+                return;
+            }
+
+            //default
+            jQuery(".results").append("<p>-------------------------</p><p>" + r + "</p>");
+            jQuery('.loading').hide();
+            jQuery('input#final_span').focus();
+
+            setTimeout(function(){
+                objDiv.scrollTop = objDiv.scrollHeight + 2000;
+            }, 200);
+
+
+        });
+    }
+
+
+    /* START VOICE RECOGNITION */
+    var final_transcript = '';
+    var recognizing = false;
+    var ignore_onend;
+    var start_timestamp;
+    var notAvailable = false;
+
+    jQuery("a#start_button").on("click", startButton);
+
+    if (!('webkitSpeechRecognition' in window))
+    {
+        notAvailable = true;
+        jQuery("a#start_button, li#voicelazy").remove();
+    }
+    else
+    {
+        var recognition = new webkitSpeechRecognition();
+        recognition.continuous = false;
+        recognition.interimResults = false;
+
+        recognition.onstart = function()
+        {
+            recognizing = true;
+            jQuery('i.fa-microphone').removeClass('fa-microphone').addClass('fa-microphone-slash');
+        };
+
+        recognition.onresult = function(event)
+        {
+            for (var i = event.resultIndex; i < event.results.length; ++i)
+            {
+                if (event.results[i].isFinal)
+                {
+                    final_transcript += event.results[i][0].transcript;
+                }
+            }
+            final_span.value = final_transcript;
+        };
+
+        recognition.onend = function()
+        {
+            recognizing = false;
+            if (final_transcript)
+            {
+                stopIt();
+                return;
+            }
+        };
+
+        recognition.onerror = function(event)
+        {
+            if (event.error == 'no-speech')
+            {
+                alert('Please Talk');
+                ignore_onend = true;
+            }
+
+            if (event.error == 'audio-capture')
+            {
+                alert('No Microphone');
+                ignore_onend = true;
+            }
+        
+            if (event.error == 'not-allowed')
+            {
+                if (event.timeStamp - start_timestamp < 100)
+                {
+                    alert('Your Browser Blocks Voice Recognition');
+                }
+                else
+                {
+                    alert('Your Browser Blocks Voice Recognition');
+                }
+                ignore_onend = true;
+            }
+        };
+    }
+
+    function startButton(event)
+    {
+        event.preventDefault();
+        if(notAvailable)
+        {
+            alert("This function is only available on Google Chrome");
+            return false;
+        }
+
+        if (recognizing)
+        {
+            stopIt();
+        }
+        final_transcript = '';
+        recognition.lang = "en-US";
+        try
+        {
+            recognition.start();
+        }
+        catch(error)
+        {
+            console.log(error);
+        }
+        ignore_onend = false;
+        final_span.innerHTML = '';
+        start_timestamp = event.timeStamp;
+    }
+
+    function stopIt()
+    {
+        jQuery('.loading').show();
+        jQuery('i.fa-microphone-slash').removeClass('fa-microphone-slash').addClass('fa-microphone');
+        recognition.stop();
+        setTimeout(
+            function()
+            {
+                pushtoURI();
+                doTheRequest(jQuery("input#final_span").val());
+            },1000);
+        return;
+    }
+})(window, document, jQuery);v
